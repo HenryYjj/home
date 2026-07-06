@@ -89,71 +89,155 @@ const carouselSlides = [
 ];
 
 const SLIDE_COUNT = carouselSlides.length;
+const THUMB_GAP = 140; // 缩略图沿圆弧的固定像素间距（需 > 缩略图宽度 + 间距）
+const FRONT = 0; // "正面"位置：0° = 正右方（3 点钟方向）
+
+let angleStepDeg = 160; // 每个缩略图之间的角度步长（°），由 recalc 根据半径动态计算
 
 // --- 响应式状态 ---
-const currentSlide = ref(0);
-const carouselSection = ref<HTMLElement>();
-const textListRef = ref<HTMLElement>();
-const thumbListRef = ref<HTMLElement>();
-const textY = ref(0);
-const thumbY = ref(0);
+const currentSlide = ref(0); // 当前激活的 slide 索引
+const slideProgress = ref(0); // 滚动进度 0~1
+const carouselSection = ref<HTMLElement>(); // section 根元素
+const textListRef = ref<HTMLElement>(); // 文字列表容器
+const textY = ref(0); // 文字列表 translateY 偏移
+
+// 圆形轨道参数（由 recalc 计算）
+const orbitCX = ref(0); // 圆心 X
+const orbitCY = ref(0); // 圆心 Y
+const orbitR = ref(400); // 半径
 
 // --- 缓存数据 ---
-let textCenters: number[] = [];
-let thumbCenters: number[] = [];
-let textContainerH = 0;
-let thumbContainerH = 0;
+let textCenters: number[] = []; // 每个文字 item 中心的 Y 坐标数组
+let textContainerH = 0; // 文字容器可视高度
 
-let st: ScrollTrigger | null = null;
-let ro: ResizeObserver | null = null;
+let st: ScrollTrigger | null = null; // ScrollTrigger 实例
+let ro: ResizeObserver | null = null; // 窗口 resize 监听
 
+/**
+ * 重新计算布局参数（窗口 resize 或初始化时调用）
+ * - 圆形轨道圆心 / 半径
+ * - 文字列表每个 item 的中心坐标
+ * - 动态更新 ScrollTrigger 的滚动距离
+ */
 function recalc() {
+  const sec = carouselSection.value;
+  if (sec) {
+    orbitCX.value = sec.clientWidth * 0.5; // 圆心 X：页面居中
+    orbitCY.value = sec.clientHeight * 0.5; // 圆心 Y：垂直居中
+    orbitR.value = Math.min(sec.clientWidth, sec.clientHeight) * 0.6; // 半径
+    // 固定像素间距 → 角度步长
+    angleStepDeg = (THUMB_GAP / orbitR.value) * (180 / Math.PI);
+  }
   if (textListRef.value) {
+    // 文字容器可视高度（用于垂直居中计算）
     textContainerH = textListRef.value.parentElement!.clientHeight;
+    // 每个文字 item 的中心 Y 坐标
     textCenters = Array.from(textListRef.value.children).map(
       (c) => (c as HTMLElement).offsetTop + (c as HTMLElement).offsetHeight / 2
     );
   }
-  if (thumbListRef.value) {
-    thumbContainerH = thumbListRef.value.parentElement!.clientHeight;
-    thumbCenters = Array.from(thumbListRef.value.children).map(
-      (c) => (c as HTMLElement).offsetTop + (c as HTMLElement).offsetHeight / 2
-    );
-  }
-
   if (textCenters.length >= 2 && st) {
+    // 根据文字总高度动态设置 ScrollTrigger 的滚动距离
     const totalPx = textCenters[textCenters.length - 1] - textCenters[0];
     st.vars.end = () => `+=${totalPx * 1.5}`;
     st.refresh();
   }
 }
 
-function setByProgress(p: number) {
-  const fi = p * (SLIDE_COUNT - 1);
-  const idx = Math.floor(fi);
-  const next = Math.min(idx + 1, SLIDE_COUNT - 1);
-  const frac = fi - idx;
+// 缩略图 DOM 引用（非响应式，GSAP 直接操作）
+const thumbEls: (HTMLElement | null)[] = [];
 
-  currentSlide.value = Math.min(Math.floor(p * SLIDE_COUNT), SLIDE_COUNT - 1);
+/**
+ * GSAP 驱动缩略图在圆形轨道上的 2D 位置与样式
+ * @param progress - ScrollTrigger 进度 0~1
+ *
+ * 核心逻辑：
+ * 1. 根据 progress 计算整体旋转角度 rotation
+ * 2. 缩略图沿圆弧以固定像素间距排列：angleDeg = FRONT + i*angleStepDeg - rotation
+ * 3. 计算与"正面"的角距离 diff，归一化为 t（0~1）
+ * 4. t 越大 → 离正面越远 → 越小、越透明、层级越低
+ */
+function updateThumbs(progress: number) {
+  // 整体顺时针累计旋转角度（用固定角度步长替代均分 360°）
+  const rotation = progress * angleStepDeg * (SLIDE_COUNT - 1);
+  const cx = orbitCX.value;
+  const cy = orbitCY.value;
+  const r = orbitR.value;
+  const active = currentSlide.value;
 
-  if (textCenters.length) {
-    textY.value = textContainerH / 2 - (textCenters[idx] + (textCenters[next] - textCenters[idx]) * frac);
-  }
-  if (thumbCenters.length) {
-    thumbY.value = thumbContainerH / 2 - (thumbCenters[idx] + (thumbCenters[next] - thumbCenters[idx]) * frac);
+  for (let i = 0; i < SLIDE_COUNT; i++) {
+    const el = thumbEls[i];
+    if (!el) continue;
+
+    // 固定像素间距 → 角度步长，所有缩略图均匀排列
+    const angleDeg = FRONT + i * angleStepDeg - rotation;
+    const rad = (angleDeg * Math.PI) / 180;
+
+    // 到"正面"的角距离，归一化到 -180°~180°，再取绝对值
+    let diff = ((((angleDeg - FRONT) % 360) + 540) % 360) - 180;
+    diff = Math.abs(diff);
+    // t = 0 → 在正面；t = 1 → 距正面 90° 或更远
+    const t = Math.min(diff / 90, 1);
+
+    // 使用 gsap.set 直接操作 DOM，避免 Vue 响应式开销
+    gsap.set(el, {
+      left: cx + r * Math.cos(rad), // 圆上 X 坐标
+      top: cy + r * Math.sin(rad), // 圆上 Y 坐标
+      xPercent: -50, // 水平居中锚点
+      yPercent: -50, // 垂直居中锚点
+      scale: 1, // 大小不变
+      opacity: 1 - t * 0.8, // 远离正面时淡出至 0.1
+      zIndex: Math.round((1 - t) * 100), // 靠近正面的层级更高
+      pointerEvents: t > 0.5 ? "none" : "auto", // 半透明后不可点击
+      boxShadow: i === active ? "0 0 20px rgba(255,255,255,0.35)" : "none", // 当前激活高亮
+      borderColor: i === active ? "rgba(255,255,255,0.2)" : "transparent"
+    });
   }
 }
 
+/**
+ * ScrollTrigger 进度 → 界面状态映射
+ * @param p - 滚动进度 0~1
+ *
+ * 同步更新：
+ * - slideProgress（缩略图轨道旋转）
+ * - currentSlide（当前激活项索引）
+ * - textY（文字列表垂直位移，保持当前项在视口中央）
+ * - updateThumbs（缩略图 GSAP 动画）
+ */
+function setByProgress(p: number) {
+  slideProgress.value = p;
+
+  // fi = 浮点索引，如 2.7 表示在第 2~3 项之间 70% 处
+  const fi = p * (SLIDE_COUNT - 1);
+  const idx = Math.floor(fi); // 当前文字 index
+  const next = Math.min(idx + 1, SLIDE_COUNT - 1); // 下一项 index（防越界）
+  const frac = fi - idx; // 插值系数 0~1
+
+  // 当前激活的背景图 index（略超前于文字，让切换更流畅）
+  currentSlide.value = Math.min(Math.floor(p * SLIDE_COUNT), SLIDE_COUNT - 1);
+
+  if (textCenters.length) {
+    // 文字列表垂直滚动：让当前项始终在容器中央
+    textY.value = textContainerH / 2 - (textCenters[idx] + (textCenters[next] - textCenters[idx]) * frac);
+  }
+
+  // GSAP 驱动缩略图动画
+  updateThumbs(p);
+}
+
 onMounted(() => {
+  // 创建 ScrollTrigger：滚动驱动轮播
   st = ScrollTrigger.create({
     trigger: ".section-2",
-    start: "top top",
-    end: "+=100%",
-    pin: true,
-    scrub: true,
-    pinSpacing: true,
-    invalidateOnRefresh: true,
+    start: "top top", // section 顶部触及视口顶部时开始
+    end: "+=100%", // 初始滚动距离（后续由 recalc 动态调整）
+    pin: true, // 钉住 section
+    scrub: true, // 滚动同步（scrub 模式）
+    pinSpacing: true, // 保留钉住后的占位空间
+    invalidateOnRefresh: true, // resize 时重新计算
     snap: {
+      // 滚动停止时吸附到最近的 slide
       snapTo: carouselSlides.map((_, i) => i / (SLIDE_COUNT - 1)),
       duration: 0.4,
       ease: "power2.out"
@@ -165,6 +249,7 @@ onMounted(() => {
 
   recalc();
 
+  // 监听 resize，重新计算轨道参数与滚动距离
   ro = new ResizeObserver(recalc);
   if (carouselSection.value) ro.observe(carouselSection.value);
 });
@@ -212,23 +297,20 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- 右侧缩略图列表 -->
-      <div class="flex-shrink-0 ml-8 lg:ml-16 overflow-hidden relative h-full py-32">
-        <div ref="thumbListRef" class="flex flex-col gap-30 relative" :style="{ transform: `translateY(${thumbY}px)` }">
-          <div
-            v-for="(slide, i) in carouselSlides"
-            :key="i"
-            class="relative w-[120px] lg:w-[214px] h-[100px] lg:h-[130px] rounded-xl overflow-hidden transition-opacity duration-300 cursor-pointer group flex-shrink-0"
-            :class="
-              i === currentSlide
-                ? 'opacity-100 shadow-2xl ring-1 ring-white/15'
-                : 'opacity-20 hover:opacity-40 shadow-lg'
-            "
-          >
-            <img :src="slide.thumb" alt="" class="w-full h-full object-cover" />
-            <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-          </div>
-        </div>
+      <!-- 右侧：2D 圆形轨道缩略图（absolute 在 section 内） -->
+      <div
+        v-for="(slide, i) in carouselSlides"
+        :key="'thumb-' + i"
+        :ref="
+          (el) => {
+            thumbEls[i] = el as HTMLElement | null;
+          }
+        "
+        class="absolute z-10 w-[100px] lg:w-[120px] h-[120px] lg:h-[90px] rounded-lg overflow-hidden cursor-pointer"
+        style="left: 0; top: 0; border: 1px solid transparent"
+      >
+        <img :src="slide.thumb" alt="" class="w-full h-full object-cover" />
+        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       </div>
     </div>
   </section>
