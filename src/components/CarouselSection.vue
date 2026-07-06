@@ -186,11 +186,13 @@ function updateThumbs(progress: number) {
       xPercent: -50, // 水平居中锚点
       yPercent: -50, // 垂直居中锚点
       scale: 1, // 大小不变
-      opacity: 1 - t * 0.8, // 远离正面时淡出至 0.1
+      opacity: 1,
       zIndex: Math.round((1 - t) * 100), // 靠近正面的层级更高
       pointerEvents: t > 0.5 ? "none" : "auto", // 半透明后不可点击
-      boxShadow: i === active ? "0 0 20px rgba(255,255,255,0.35)" : "none", // 当前激活高亮
-      borderColor: i === active ? "rgba(255,255,255,0.2)" : "transparent"
+      boxShadow: "none",
+      borderColor: "transparent"
+      // boxShadow: i === active ? "0 0 20px rgba(255,255,255,0.35)" : "none", // 当前激活高亮
+      // borderColor: i === active ? "rgba(255,255,255,0.2)" : "transparent"
     });
   }
 }
