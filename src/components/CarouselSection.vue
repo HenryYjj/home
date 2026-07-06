@@ -92,7 +92,7 @@ const SLIDE_COUNT = carouselSlides.length;
 const THUMB_GAP = 140; // 缩略图沿圆弧的固定像素间距（需 > 缩略图宽度 + 间距）
 const FRONT = 0; // "正面"位置：0° = 正右方（3 点钟方向）
 
-let angleStepDeg = 160; // 每个缩略图之间的角度步长（°），由 recalc 根据半径动态计算
+let angleStepDeg = 190; // 每个缩略图之间的角度步长（°），由 recalc 根据半径动态计算
 
 // --- 响应式状态 ---
 const currentSlide = ref(0); // 当前激活的 slide 索引
@@ -124,7 +124,7 @@ function recalc() {
   if (sec) {
     orbitCX.value = sec.clientWidth * 0.5; // 圆心 X：页面居中
     orbitCY.value = sec.clientHeight * 0.5; // 圆心 Y：垂直居中
-    orbitR.value = Math.min(sec.clientWidth, sec.clientHeight) * 0.6; // 半径
+    orbitR.value = Math.min(sec.clientWidth, sec.clientHeight) * 0.85; // 半径
     // 固定像素间距 → 角度步长
     angleStepDeg = (THUMB_GAP / orbitR.value) * (180 / Math.PI);
   }
