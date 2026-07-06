@@ -3,6 +3,7 @@ import { ref, onUnmounted, onMounted } from "vue";
 import { useLenis } from "./composables/useLenis"; // 平滑滚动插件 Lenis
 import gsap from "gsap"; // GSAP 动画库（专业级 Web 动画）
 import { ScrollTrigger } from "gsap/ScrollTrigger"; // GSAP 滚动触发插件（让动画随滚动播放）
+import CarouselSection from "./components/CarouselSection.vue"; // 轮播图组件
 gsap.registerPlugin(ScrollTrigger); // 注册 ScrollTrigger 插件
 
 // Lenis 配置：让页面滚动变得更平滑丝滑
@@ -176,17 +177,26 @@ onMounted(() => {
       ease: "sine.inOut"
     }));
 
-  // ========== 根据滚动方向控制菜单动画：向下播放，向上反向 ==========
+  // ========== 菜单动画：向下滚动播放（全局），仅回到 section-0 时才反向 ==========
   const onMenuScroll = (e: any) => {
     if (e.direction === 1 && (menuTl.reversed() || menuTl.progress() === 0)) {
       // 向下滚动 → 正向播放
       menuTl.play();
-    } else if (e.direction === -1 && menuTl.progress() > 0 && !menuTl.reversed()) {
-      // 向上滚动 → 反向播放
-      menuTl.reverse();
     }
   };
   lenis.value?.on("scroll", onMenuScroll);
+
+  // 只有滚动回 section-0 顶部时才反向
+  ScrollTrigger.create({
+    trigger: "section:first-child",
+    start: "top top",
+    end: "bottom top",
+    onLeaveBack: () => {
+      if (menuTl.progress() > 0 && !menuTl.reversed()) {
+        menuTl.reverse();
+      }
+    }
+  });
 });
 
 onUnmounted(() => {
@@ -389,7 +399,7 @@ onUnmounted(() => {
           </div>
         </div>
       </section>
-      <section h-screen w-full bg-blue z-1 relative class="section-2"></section>
+      <CarouselSection />
       <section h-screen w-full bg-pink z-1 relative class="section-3"></section>
       <section h-screen w-full bg-yellow z-1 relative class="section-4"></section>
       <section h-screen w-full bg-orange z-1 relative class="section-5"></section>
