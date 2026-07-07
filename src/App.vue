@@ -4,6 +4,7 @@ import { useLenis } from "./composables/useLenis";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import SectionAbout from "./components/SectionAbout.vue";
+import CarouselSection from "./components/CarouselSection.vue";
 gsap.registerPlugin(ScrollTrigger);
 
 useLenis({
@@ -229,7 +230,7 @@ onUnmounted(() => {
         ></video>
       </section>
       <SectionAbout />
-      <section w-full bg-blue z-1 relative class="section-2"></section>
+      <CarouselSection />
       <section w-full bg-pink z-1 relative class="section-3"></section>
       <section
         h-screen
