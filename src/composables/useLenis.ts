@@ -1,6 +1,10 @@
 // composables/useLenis.ts
 import { ref, onMounted, onUnmounted, type Ref } from 'vue'
 import Lenis from 'lenis'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
 
 interface LenisOptions {
     duration?: number
@@ -36,6 +40,9 @@ export function useLenis(options: LenisOptions = {}) {
         lenis.value.on('scroll', (e: any) => {
             isScrolling.value = true
             scrollProgress.value = e.progress
+            
+            // 同步滚动到 ScrollTrigger
+            ScrollTrigger.update()
 
             // 滚动结束后重置状态
             clearTimeout((lenis.value as any)._scrollTimeout)
@@ -43,6 +50,17 @@ export function useLenis(options: LenisOptions = {}) {
                     isScrolling.value = false
                 }, 200)
         })
+
+       /*  // 配置 ScrollTrigger 使用 Lenis
+        ScrollTrigger.scrollerProxy('body', {
+            scrollTop(value) {
+                if (arguments.length) {
+                    lenis.value?.scrollTo(value as number, { immediate: true })
+                }
+                return lenis.value?.scroll || 0
+            },
+            pinType: 'transform',
+        }) */
 
         // RAF 动画循环
         function raf(time: number) {
