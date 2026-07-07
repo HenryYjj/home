@@ -67,7 +67,7 @@ onMounted(async () => {
       },
     );
 
-    // 手风琴项：随滚动依次从左侧淡入
+    // 手风琴项：随滚动依次从右侧淡入
     const items = itemsContainerRef.value.querySelectorAll(".underline-hover");
 
     gsap.from(items, {
