@@ -66,7 +66,7 @@ onMounted(() => {
       }
     );
 
-    // 手风琴项：随滚动依次从左侧淡入
+    // 手风琴项：随滚动依次从右侧淡入
     const items = itemsContainerRef.value.querySelectorAll(".underline-hover");
 
     gsap.from(items, {
@@ -74,7 +74,6 @@ onMounted(() => {
         trigger: section,
         start: "top center",
         end: "top top",
-        scrub: 0.8,
         toggleActions: "play none none reverse"
       },
       opacity: 0.8,
