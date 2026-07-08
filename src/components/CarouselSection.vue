@@ -171,7 +171,7 @@ function updateThumbs(progress: number) {
   const cx = orbitCX.value;
   const cy = orbitCY.value;
   const r = orbitR.value;
-  const active = currentSlide.value;
+  // const active = currentSlide.value;
 
   for (let i = 0; i < SLIDE_COUNT; i++) {
     const el = thumbEls[i];
@@ -299,66 +299,52 @@ onMounted(async () => {
     onUpdate(self) {
       const progress = self.progress;
 
-      // 第一阶段：0 - 0.3，只有文字出现
-      if (progress <= 0.3) {
-        const phase1Progress = progress / 0.3;
-        const textProgress = Math.min(1, phase1Progress * 1.2);
+      // ===== 文字：0-0.3 出现，0.3-0.5 向两侧消失 =====
+      const textAppear = Math.min(1, (Math.min(progress, 0.3) / 0.3) * 1.2);
+      const textDisappear = Math.max(0, Math.min(1, (progress - 0.3) / 0.2));
 
-        // 文字逐渐出现
-        introTextEls.forEach((el, index) => {
-          if (el) {
-            const delay = index * 0.1;
-            const elProgress = Math.max(
-              0,
-              Math.min(1, (textProgress - delay) * 2),
-            );
-            gsap.set(el, {
-              y: 50 * (1 - elProgress),
-              opacity: elProgress,
-            });
-          }
+      introTextEls.forEach((el, index) => {
+        if (el) {
+          const delay = index * 0.1;
+          const appear = Math.max(0, Math.min(1, (textAppear - delay) * 2));
+          const finalOpacity = appear * (1 - textDisappear);
+          gsap.set(el, {
+            y: 50 * (1 - finalOpacity),
+            opacity: finalOpacity,
+          });
+        }
+      });
+
+      // ===== 左右容器：0.3-0.5 向两侧移出 =====
+      if (leftContainer) {
+        gsap.set(leftContainer, {
+          x: -100 * textDisappear + "vw",
+          opacity: 1 - textDisappear,
+        });
+      }
+      if (rightContainer) {
+        gsap.set(rightContainer, {
+          x: 100 * textDisappear + "vw",
+          opacity: 1 - textDisappear,
         });
       }
 
-      // 第二阶段：0.3 - 0.5，文字向两侧消失，背景图从中间放大覆盖全屏
-      if (progress > 0.3 && progress <= 0.5) {
-        const phase2Progress = (progress - 0.3) / 0.2;
+      // ===== 灰色背景容器：0.3-0.5 淡出 =====
+      gsap.set(introContainerRef.value, {
+        opacity: 1 - textDisappear,
+        pointerEvents: textDisappear > 0.5 ? "none" : "auto",
+      });
 
-        // 文字向两侧移动
-        if (leftContainer) {
-          gsap.set(leftContainer, {
-            x: -100 * phase2Progress + "vw",
-            opacity: 1 - phase2Progress,
-          });
-        }
-
-        if (rightContainer) {
-          gsap.set(rightContainer, {
-            x: 100 * phase2Progress + "vw",
-            opacity: 1 - phase2Progress,
-          });
-        }
-
-        // 容器淡出
-        gsap.set(introContainerRef.value, {
-          opacity: 1 - phase2Progress,
-          pointerEvents: phase2Progress > 0.5 ? "none" : "auto",
+      // ===== 中间背景图：0.3-0.5 从中间放大覆盖 =====
+      if (introBgImageRef.value) {
+        gsap.set(introBgImageRef.value, {
+          scale: 0.3 + textDisappear * 3.5,
+          opacity: textDisappear,
+          borderRadius: Math.max(0, 12 * (1 - textDisappear)) + "px",
         });
-
-        // 背景图从不可见逐渐放大覆盖全屏
-        const bgScale = 0.3 + phase2Progress * 3.5; // 0.3 → 3.8
-        const bgOpacity = phase2Progress; // 0 → 1
-        const borderRadius = Math.max(0, 12 * (1 - phase2Progress)); // 12px → 0px
-        if (introBgImageRef.value) {
-          gsap.set(introBgImageRef.value, {
-            scale: bgScale,
-            opacity: bgOpacity,
-            borderRadius: borderRadius + "px",
-          });
-        }
       }
 
-      // 第三阶段：0.5 - 1，轮播图动画
+      // ===== 第三阶段：0.5-1 轮播图 =====
       if (progress > 0.5) {
         const carouselProgress = (progress - 0.5) * 2;
         setByProgress(carouselProgress);
@@ -390,13 +376,13 @@ onUnmounted(() => {
     <div
       ref="introContainerRef"
       absolute
-      bg="#f3f3f3"
-      z-100
-      inset-0
       flex
       items-center
       justify-center
       gap-16
+      z-100
+      style="top: 0; right: 0; bottom: 0; left: 0"
+      bg="#f3f3f3"
     >
       <div flex flex-col items-end justify-center w-[400px]>
         <div

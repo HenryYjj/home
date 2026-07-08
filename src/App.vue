@@ -68,29 +68,6 @@ const textRef = ref<any>();
 const navContainer = ref<any>();
 
 onMounted(() => {
-  // 第一个 section：固定并让 textRef 向上滑出
-  const tl = gsap.timeline({
-    scrollTrigger: {
-      trigger: "section:first-child",
-      start: "top top",
-      end: "bottom  top",
-      pin: true,
-      scrub: true,
-      // toggleActions: 'play none none reverse'
-    },
-  });
-
-  tl.to(
-    textRef.value,
-    {
-      rotation: -15,
-      x: "-10vw",
-      y: "-120vh",
-      ease: "sine.inOut",
-    },
-    0,
-  );
-
   // 导航栏动画
   const menuTrigger = navContainer.value.querySelector(".menu-trigger");
   const navItems = navContainer.value.querySelectorAll(
@@ -104,7 +81,11 @@ onMounted(() => {
   const menuTriggerRect = menuTrigger.getBoundingClientRect();
   const distance = contactRect.left - menuTriggerRect.left;
 
-  tl.to(
+  const menuTl = gsap.timeline({
+    paused: true, // 初始暂停，由首次滚动事件触发
+  });
+
+  menuTl.to(
     menuTrigger,
     {
       x: distance,
@@ -115,7 +96,7 @@ onMounted(() => {
   );
 
   // 其他导航项向上消失
-  tl.to(
+  menuTl.to(
     navItems,
     {
       opacity: 0,
@@ -131,6 +112,40 @@ onMounted(() => {
     },
     0,
   );
+
+  // 第一个 section：固定并让 textRef 向上滑出
+  const tl = gsap.timeline({
+    scrollTrigger: {
+      trigger: "section:first-child",
+      start: "top top",
+      end: "bottom  top",
+      pin: true,
+      scrub: true,
+    },
+    paused: true,
+  });
+
+  tl.to(textRef.value, {
+    rotation: -15,
+    x: "-10vw",
+    y: "-120vh",
+    ease: "sine.inOut",
+  });
+
+  // 原生 scroll 监听：向下滚动播放、向上滚动回滚菜单动画
+  let lastScrollY = window.scrollY;
+  const handleScroll = () => {
+    const scrollY = window.scrollY;
+    if (scrollY > lastScrollY && scrollY > 10) {
+      // 向下滚动：播放菜单动画
+      menuTl.play();
+    } else if (scrollY < lastScrollY) {
+      // 向上滚动：回滚菜单动画
+      menuTl.reverse();
+    }
+    lastScrollY = scrollY;
+  };
+  window.addEventListener("scroll", handleScroll);
 });
 
 onUnmounted(() => {
